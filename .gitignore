@@ -1,0 +1,14 @@
+# Criado pelo Google Drive em cada pasta
+desktop.ini
+
+# Saída do build: o .exe é publicado nas Releases
+AstralVision.exe
+*.dist/
+*.build/
+*.onefile-build/
+__pycache__/
+*.pyc
+
+# Certificados nunca entram no repositório
+*.pfx
+*.cer
