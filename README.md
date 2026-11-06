@@ -23,6 +23,7 @@ Funciona com o mouse ou com as teclas abaixo:
 | `F1` a `F5` | Abas Opções, Energia, Backups, Assinatura e Dicas |
 | `1` a `5` | Abre um perfil na árvore; setas e Enter escolhem a variante |
 | `I` | Instala a variante selecionada |
+| `X` | Remove o perfil e mantém as opções extras |
 | `A` `E` `L` | Additions: melhorar iluminação, remover efeitos de skills e reduzir latência |
 | `G` | FSR Frame Generation |
 | `F` | FSR, DLSS e XeSS otimizados |
@@ -33,7 +34,7 @@ Funciona com o mouse ou com as teclas abaixo:
 | `P` | Marca ou desmarca o `Engine.ini` como somente leitura |
 | `U` | Desinstala tudo e restaura o `Engine.ini` original |
 | `B` / `R` | Cria um backup / restaura o selecionado |
-| `Ctrl+P` | Paleta de comandos |
+| `Ctrl+P` | Paleta de comandos, com todas as funções |
 | `Q` | Sair |
 
 ### Perfis

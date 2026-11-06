@@ -112,6 +112,29 @@ os nomes atuais, `r.FidelityFX.FSR.*`. `r.FidelityFX.FSR.QualityMode=0` fixa o F
 
 A instalação Steam não traz DLL do XeSS: as chaves de XeSS não devem ter efeito.
 """,
+    "Atalhos": """\
+Todas as funções também aparecem na paleta de comandos, com `Ctrl+P`.
+
+| Tecla | Função |
+|---|---|
+| `1` a `5` | Abre um perfil na árvore; setas e Enter escolhem a variante |
+| `I` | Instala a variante selecionada |
+| `X` | Remove o perfil e mantém as opções extras |
+| `U` | Desinstala tudo e restaura o `Engine.ini` original |
+| `A` `E` `L` | Additions: melhorar iluminação, remover efeitos de skills, reduzir latência |
+| `G` | FSR Frame Generation |
+| `F` | FSR / DLSS / XeSS otimizados |
+| `S` | Reduce Stutters |
+| `V` | VSync desligado |
+| `T` | Distance View Low |
+| `M` | Serviço de energia (só no build local) |
+| `B` / `R` | Cria um backup / restaura o selecionado |
+| `P` | `Engine.ini` somente leitura |
+| `F1` a `F5` | Abas Opções, Energia, Backups, Assinatura e Dicas |
+| `C` / `D` | Abas Assinatura e Dicas |
+| `Tab` | Passa para o próximo painel |
+| `Q` | Sair |
+""",
     "Como este programa funciona": f"""\
 - Um perfil por vez: instalar outro substitui o atual.
 - O primeiro uso cria `{ORIGINAL_BAK}` ao lado do `Engine.ini`.

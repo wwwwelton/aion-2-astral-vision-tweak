@@ -7,7 +7,7 @@ from pathlib import Path
 from rich.table import Table
 from rich.text import Text
 from textual import on, work
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, SystemCommand
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
@@ -276,6 +276,7 @@ class AstralApp(App[None]):
         Binding("u", "uninstall", "Desinstalar"),
         Binding("b", "backup", "Backup"),
         Binding("q", "quit", "Sair"),
+        Binding("x", "remove_profile", show=False),
         Binding("r", "restore", show=False),
         Binding("p", "readonly", show=False),
         Binding("m", "service", show=False),
@@ -315,6 +316,7 @@ class AstralApp(App[None]):
                     yield Static(id="current-text")
                     with Horizontal(id="current-actions"):
                         yield Button("Instalar", id="install", compact=True, variant="primary", disabled=True)
+                        yield Button("Remover perfil", id="remove-profile", compact=True, disabled=True)
                         yield Button("Desinstalar tudo", id="uninstall", compact=True, variant="error")
                 with TabbedContent(initial="tab-options", id="tabs"):
                     with TabPane("Opções", id="tab-options"):
@@ -418,6 +420,19 @@ class AstralApp(App[None]):
         rel = self.selected_profile
         self.attempt(lambda: self.mgr.apply(rel, list(self.mgr.state["options"])))
 
+    def action_remove_profile(self) -> None:
+        profile = self.mgr.state["profile"]
+        if not profile:
+            self.say("Nenhum perfil instalado.", "warning")
+            return
+
+        def answered(confirmed: bool | None) -> None:
+            if confirmed:
+                self.attempt(lambda: self.mgr.apply(None, list(self.mgr.state["options"])))
+
+        self.push_screen(ConfirmScreen("Remover o perfil", f"Remover {core.pretty_profile(profile)} e manter as opções "
+                                       "extras marcadas?", "Remover perfil", danger=True), answered)
+
     def action_uninstall(self) -> None:
         def answered(confirmed: bool | None) -> None:
             if confirmed:
@@ -477,9 +492,36 @@ class AstralApp(App[None]):
     def install_pressed(self) -> None:
         self.action_install()
 
+    @on(Button.Pressed, "#remove-profile")
+    def remove_profile_pressed(self) -> None:
+        self.action_remove_profile()
+
     @on(Button.Pressed, "#uninstall")
     def uninstall_pressed(self) -> None:
         self.action_uninstall()
+
+    def get_system_commands(self, screen):
+        """A paleta (Ctrl+P) lista todas as funções, inclusive as que só têm atalho."""
+        yield from super().get_system_commands(screen)
+        for title, help_text, action in (
+            ("Instalar a variante selecionada", "I", self.action_install),
+            ("Remover o perfil e manter as opções", "X", self.action_remove_profile),
+            ("Desinstalar tudo", "U: restaura o Engine.ini original", self.action_uninstall),
+            ("Criar backup", "B", self.action_backup),
+            ("Restaurar o backup selecionado", "R", self.action_restore),
+            ("Engine.ini somente leitura", "P: marca ou desmarca", self.action_readonly),
+            ("Abrir as opções extras", "F1", lambda: self.action_tab("tab-options")),
+            ("Abrir a energia e os planos deste PC", "F2", lambda: self.action_tab("tab-power")),
+            ("Abrir os backups", "F3", lambda: self.action_tab("tab-backups")),
+            ("Abrir a assinatura e o certificado", "F4 ou C", lambda: self.action_tab("tab-signature")),
+            ("Abrir as dicas e as opções de boot do jogo", "F5 ou D", lambda: self.action_tab("tab-tips")),
+        ):
+            yield SystemCommand(title, f"Atalho: {help_text}", action)
+        if core.service_supported():
+            yield SystemCommand("Ligar ou desligar o serviço de energia", "Atalho: M", self.action_service)
+        for option in self.mgr.options:
+            yield SystemCommand(f"Ligar ou desligar: {option_title(option)}", f"Atalho: {option.key}",
+                                lambda key=option.key: self.action_option(key))
 
     @on(Button.Pressed, "#backup")
     def backup_pressed(self) -> None:
@@ -647,6 +689,7 @@ class AstralApp(App[None]):
             table.add_row(Text("Aviso", style=YELLOW), Text(problem, style=YELLOW))
         self.query_one("#current-text", Static).update(table)
         self.query_one("#install", Button).disabled = not self.selected_is_leaf
+        self.query_one("#remove-profile", Button).disabled = not state["profile"]
         source = "embutidos no programa" if self.mgr.root == core.embedded_root() else self.mgr.root.name
         self.query_one("#profile-help", Static).update(Text(shorten_left(f"Perfis: {source}", 38), style=MUTED))
 
