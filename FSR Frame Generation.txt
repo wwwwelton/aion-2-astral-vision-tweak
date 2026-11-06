@@ -1,0 +1,8 @@
+-Copy to engine.ini under all 4 main [brackets] to ensure they apply
+                                   1 [/Script/Engine.Engine]
+                                   2 [ConsoleVariables]
+                                   3 [/Script/Engine.RendererSettings]
+                                   4 [SystemSettings]
+
+r.fidelityfx.fsr.enabled=1
+r.fidelityfx.fsr.enabled=True

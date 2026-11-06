@@ -1,0 +1,43 @@
+
+Optional tweaks to add to engine.ini
+
+Copy and paste your selected options under all 4 main [brackets] to ensure they apply:
+                                                    1 [/Script/Engine.Engine]
+                                                    2 [ConsoleVariables]
+                                                    3 [/Script/Engine.RendererSettings]
+                                                    4 [SystemSettings]
+
+
+-To enable FSR Frame Generation, use the options in "FSR Frame Generation.txt"
+-To reduce stutters, use the options in "Reduce Stutters.txt"
+-To optimize FSR, DLSS, and XESS, use the options in "FSR, DLSS, XESS.txt"
+
+-Use the following Steam Launch Options -xgeshadercompile -nothreadtimeout
+
+
+-Improve Lighting:
+
+DisplayGamma=2.5
+r.Color.Min=-0.0008
+r.Color.Max=1.2
+r.Color.Mid=0.65
+r.Color.Grading=1
+
+
+-Remove skill effects:
+
+r.ParticleLightQuality=0
+r.EmitterSpawnRateScale=0
+
+
+-Reduce latency drastically:
+
+r.FinishCurrentFrame=0
+r.OneFrameThreadLag=0
+framegrabber.framelatency=0
+RHI.SyncInterval=0
+bSmoothFrameRate=0
+t.AllowFrameRateSmoothing=0
+
+
+Thank you.
