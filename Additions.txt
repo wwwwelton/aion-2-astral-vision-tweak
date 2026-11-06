@@ -35,7 +35,6 @@ r.EmitterSpawnRateScale=0
 r.FinishCurrentFrame=0
 r.OneFrameThreadLag=0
 framegrabber.framelatency=0
-RHI.SyncInterval=0
 bSmoothFrameRate=0
 t.AllowFrameRateSmoothing=0
 

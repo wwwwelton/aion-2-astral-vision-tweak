@@ -1,0 +1,42 @@
+-Copy to engine.ini under all 4 main [brackets] to ensure they apply
+                                   1 [/Script/Engine.Engine]
+                                   2 [ConsoleVariables]
+                                   3 [/Script/Engine.RendererSettings]
+                                   4 [SystemSettings]
+
+Reduces how far the game draws and keeps detail. Marked, these lines override the in-game sliders.
+Mobs and players popping in closer is the expected side effect: leave it off if that bothers you.
+
+View distance (players, mobs, objects, everything with a MaxDrawDistance):
+r.ViewDistanceScale=0.4
+
+Players and mobs (skeletal meshes):
+r.SkeletalMeshLODBias=2
+r.SkeletalMeshLODRadiusScale=0.5
+
+Objects (static and Nanite meshes):
+r.StaticMeshLODDistanceScale=2
+r.Nanite.MaxPixelsPerEdge=2
+
+Foliage and grass:
+foliage.LODDistanceScale=0.5
+foliage.CullDistanceScale=0.5
+foliage.MinLOD=1
+foliage.OverestimateLOD=0
+grass.CullDistanceScale=0.5
+
+Terrain:
+r.LandscapeLODDistributionScale=0.75
+r.LandscapeLOD0DistributionScale=0.75
+
+Shadows:
+r.Shadow.DistanceScale=0.6
+r.Shadow.RadiusThreshold=0.06
+r.DFDistanceScale=0.5
+r.MinScreenRadiusForCSMDepth=0.02
+r.HLOD.ForceDisableCastDynamicShadow=1
+
+Lights and decals:
+r.LightMaxDrawDistanceScale=0.5
+r.MinScreenRadiusForLights=0.06
+r.Decal.FadeScreenSizeMult=2
