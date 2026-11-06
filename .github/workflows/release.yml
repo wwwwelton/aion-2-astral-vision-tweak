@@ -25,10 +25,16 @@ jobs:
         with:
           python-version: "3.14"
 
-      # O build.ps1 cria o certificado autoassinado e assina com carimbo de tempo da DigiCert.
-      # A chave privada existe só neste runner e é descartada quando o job termina.
-      - name: Compilar e assinar
-        run: ./build.ps1 -Version "$env:VERSION.0"
+      # Sem acesso à chave: o compilador e as dependências dele rodam só nesta etapa.
+      - name: Compilar
+        run: ./build.ps1 -Release -Stage Compile -Version "$env:VERSION.0"
+
+      # Certificado fixo das releases, com carimbo de tempo da DigiCert. A chave vem dos Secrets (release-cert.ps1).
+      - name: Assinar
+        env:
+          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+        run: ./build.ps1 -Release -Stage Sign
 
       - name: Publicar release
         env:
