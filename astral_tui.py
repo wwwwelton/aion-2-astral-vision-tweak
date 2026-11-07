@@ -281,6 +281,7 @@ class AstralApp(App[None]):
         Binding("p", "readonly", "Leitura"),
         Binding("m", "service", "Energia"),
         Binding("b", "backup", "Backup"),
+        Binding("n", "minimize_tray", "Bandeja"),
         Binding("u", "uninstall", "Desinstalar"),
         Binding("q", "quit", "Sair"),
         Binding("r", "restore", show=False),
@@ -306,7 +307,8 @@ class AstralApp(App[None]):
         self.power_focus = core.SessionPowerFocus()
         self.power_timer = None
         self.metrics = Metrics()
-
+        self.tray = core.TrayManager(on_restore=self.on_tray_restore, on_quit=self.action_quit)
+        self.tray_timer = None
     # -- estrutura
     def compose(self) -> ComposeResult:
         brand = Text.assemble((core.APP, f"bold {TEAL}"), ("  AION 2 Global (Steam)", MUTED))
@@ -329,6 +331,7 @@ class AstralApp(App[None]):
                         yield Button("Instalar [I]", id="install", compact=True, variant="primary", disabled=True)
                         yield Button("Remover perfil [X]", id="remove-profile", compact=True, disabled=True)
                         yield Button("Somente leitura [P]", id="toggle-readonly", compact=True)
+                        yield Button("Bandeja [N]", id="minimize-tray", compact=True)
                         yield Button("Criar backup [B]", id="quick-backup", compact=True)
                         yield Button("Desinstalar tudo [U]", id="uninstall", compact=True, variant="error")
                 with TabbedContent(initial="tab-options", id="tabs"):
@@ -382,6 +385,8 @@ class AstralApp(App[None]):
         self.metrics.start()
         self.set_interval(1, self.refresh_metrics)
         self.power_timer = self.set_interval(1.5, self.check_power_focus)
+        self.tray.start()
+        self.tray_timer = self.set_interval(0.5, self.tray.check_minimized)
         self.call_after_refresh(self.show_installed)
         if self.first_message:
             self.say(self.first_message)
@@ -390,9 +395,11 @@ class AstralApp(App[None]):
     def on_unmount(self) -> None:
         if self.power_timer:
             self.power_timer.stop()
+        if self.tray_timer:
+            self.tray_timer.stop()
+        self.tray.stop()
         self.power_focus.restore()
         self.metrics.stop()
-
     def refresh_metrics(self) -> None:
         fps, frametime, ping = self.metrics.values()
         fps_style = GREEN if fps and fps >= 60 else YELLOW if fps and fps >= 30 else RED if fps else MUTED
@@ -532,6 +539,16 @@ class AstralApp(App[None]):
     def chip_readonly_clicked(self) -> None:
         self.action_readonly()
 
+    def action_minimize_tray(self) -> None:
+        self.tray.minimize()
+
+    def on_tray_restore(self) -> None:
+        self.refresh_all()
+
+    @on(Button.Pressed, "#minimize-tray")
+    def minimize_tray_pressed(self) -> None:
+        self.action_minimize_tray()
+
     @on(Button.Pressed, "#install")
     def install_pressed(self) -> None:
         self.action_install()
@@ -573,6 +590,7 @@ class AstralApp(App[None]):
             yield SystemCommand(f"Ligar ou desligar: {option_title(option)}", f"Atalho: {option.key}",
                                 lambda key=option.key: self.action_option(key))
 
+        yield SystemCommand("Minimizar para a bandeja do sistema (perto do relógio)", "Atalho: N", self.action_minimize_tray)
     @on(Button.Pressed, "#backup")
     def backup_pressed(self) -> None:
         self.action_backup()

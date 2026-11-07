@@ -13,6 +13,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import threading
 import time
 import uuid
 import winreg
@@ -445,6 +446,28 @@ _user32.GetWindowThreadProcessId.argtypes = (wintypes.HWND, ctypes.POINTER(winty
 _kernel32.GetConsoleWindow.restype = wintypes.HWND
 _kernel32.LocalFree.restype = wintypes.LPVOID
 _kernel32.LocalFree.argtypes = (wintypes.LPVOID,)
+_shell32 = ctypes.WinDLL("shell32")
+_shell32.Shell_NotifyIconW.argtypes = (wintypes.DWORD, ctypes.c_void_p)
+_shell32.Shell_NotifyIconW.restype = wintypes.BOOL
+_shell32.ExtractIconW.argtypes = (wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT)
+_shell32.ExtractIconW.restype = wintypes.HICON
+_user32.DefWindowProcW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+_user32.DefWindowProcW.restype = ctypes.c_ssize_t
+_user32.IsIconic.argtypes = (wintypes.HWND,)
+_user32.IsIconic.restype = wintypes.BOOL
+_user32.ShowWindow.argtypes = (wintypes.HWND, ctypes.c_int)
+_user32.ShowWindow.restype = wintypes.BOOL
+_user32.SetForegroundWindow.argtypes = (wintypes.HWND,)
+_user32.SetForegroundWindow.restype = wintypes.BOOL
+_user32.PostMessageW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+_user32.PostMessageW.restype = wintypes.BOOL
+_user32.CreatePopupMenu.restype = wintypes.HMENU
+_user32.AppendMenuW.argtypes = (wintypes.HMENU, wintypes.UINT, ctypes.c_size_t, wintypes.LPCWSTR)
+_user32.AppendMenuW.restype = wintypes.BOOL
+_user32.TrackPopupMenu.argtypes = (wintypes.HMENU, wintypes.UINT, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.HWND, wintypes.LPVOID)
+_user32.TrackPopupMenu.restype = ctypes.c_int
+_user32.DestroyMenu.argtypes = (wintypes.HMENU,)
+_user32.DestroyMenu.restype = wintypes.BOOL
 _powrprof = ctypes.WinDLL("powrprof")
 _powrprof.PowerEnumerate.argtypes = (wintypes.LPVOID, wintypes.LPVOID, wintypes.LPVOID, ctypes.c_int, wintypes.ULONG,
                                      wintypes.LPVOID, ctypes.POINTER(wintypes.DWORD))
@@ -1036,3 +1059,190 @@ def copy_to_clipboard(text: str) -> None:
                        stderr=subprocess.DEVNULL, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
     except (subprocess.SubprocessError, OSError) as error:
         raise OSError(f"não foi possível copiar: {error}") from error
+
+
+class NOTIFYICONDATAW(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("hWnd", wintypes.HWND),
+        ("uID", wintypes.UINT),
+        ("uFlags", wintypes.UINT),
+        ("uCallbackMessage", wintypes.UINT),
+        ("hIcon", wintypes.HICON),
+        ("szTip", wintypes.WCHAR * 128),
+        ("dwState", wintypes.DWORD),
+        ("dwStateMask", wintypes.DWORD),
+        ("szInfo", wintypes.WCHAR * 256),
+        ("uTimeoutOrVersion", wintypes.UINT),
+        ("szInfoTitle", wintypes.WCHAR * 64),
+        ("dwInfoFlags", wintypes.DWORD),
+        ("guidItem", ctypes.c_byte * 16),
+        ("hBalloonIcon", wintypes.HICON),
+    ]
+
+
+_WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+
+
+class _WNDCLASSEXW(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.UINT),
+        ("style", wintypes.UINT),
+        ("lpfnWndProc", _WNDPROC),
+        ("cbClsExtra", ctypes.c_int),
+        ("cbWndExtra", ctypes.c_int),
+        ("hInstance", wintypes.HINSTANCE),
+        ("hIcon", wintypes.HICON),
+        ("hCursor", wintypes.HICON),
+        ("hbrBackground", wintypes.HBRUSH),
+        ("lpszMenuName", wintypes.LPCWSTR),
+        ("lpszClassName", wintypes.LPCWSTR),
+        ("hIconSm", wintypes.HICON),
+    ]
+
+
+class TrayManager:
+    """Minimiza a interface para a bandeja do sistema (System Tray / perto do relógio)."""
+
+    def __init__(self, on_restore=None, on_quit=None) -> None:
+        self.on_restore = on_restore
+        self.on_quit = on_quit
+        self.hwnd_app = 0
+        self.hwnd_msg = 0
+        self.in_tray = False
+        self.stop_event = threading.Event()
+        self._ready = threading.Event()
+        self.thread: threading.Thread | None = None
+        self._proc_ref = None
+
+    def start(self, hwnd_app: int | None = None) -> None:
+        self.hwnd_app = hwnd_app or _kernel32.GetConsoleWindow() or 0
+        self._ready.clear()
+        self.thread = threading.Thread(target=self._run_msg_loop, daemon=True)
+        self.thread.start()
+        self._ready.wait(timeout=2.0)
+
+    def check_minimized(self) -> None:
+        """Verifica se a janela foi minimizada pelo usuário e a move para a bandeja."""
+        if not self.hwnd_app:
+            self.hwnd_app = _kernel32.GetConsoleWindow() or 0
+        if self.hwnd_app and not self.in_tray:
+            if _user32.IsIconic(self.hwnd_app):
+                self.minimize()
+
+    def minimize(self) -> None:
+        if not self.hwnd_app:
+            self.hwnd_app = _kernel32.GetConsoleWindow() or 0
+        if not self.hwnd_app or self.in_tray:
+            return
+        self.in_tray = True
+        _user32.ShowWindow(self.hwnd_app, 0)  # SW_HIDE
+        self._add_icon()
+
+    def restore(self) -> None:
+        if not self.in_tray:
+            return
+        self._remove_icon()
+        if self.hwnd_app:
+            _user32.ShowWindow(self.hwnd_app, 9)  # SW_RESTORE
+            _user32.SetForegroundWindow(self.hwnd_app)
+        self.in_tray = False
+        if self.on_restore:
+            try:
+                self.on_restore()
+            except Exception:
+                pass
+
+    def stop(self) -> None:
+        self.stop_event.set()
+        if self.in_tray:
+            self.restore()
+        self._remove_icon()
+        if self.hwnd_msg:
+            _user32.PostMessageW(self.hwnd_msg, 0x0012, 0, 0)  # WM_QUIT
+        if self.thread and self.thread.is_alive():
+            self.thread.join(timeout=1.0)
+
+    def _run_msg_loop(self) -> None:
+        def wnd_proc(hwnd, msg, wparam, lparam):
+            if msg == 0x0400 + 35:
+                if lparam in (0x0202, 0x0203):  # WM_LBUTTONUP, WM_LBUTTONDBLCLK
+                    self.restore()
+                    return 0
+                elif lparam == 0x0205:  # WM_RBUTTONUP
+                    self._show_menu()
+                    return 0
+            return _user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+
+        self._proc_ref = _WNDPROC(wnd_proc)
+        hinst = _kernel32.GetModuleHandleW(None)
+        cls_name = f"AstralTray_{os.getpid()}"
+        wc = _WNDCLASSEXW()
+        wc.cbSize = ctypes.sizeof(_WNDCLASSEXW)
+        wc.lpfnWndProc = self._proc_ref
+        wc.hInstance = hinst
+        wc.lpszClassName = cls_name
+        _user32.RegisterClassExW(ctypes.byref(wc))
+
+        self.hwnd_msg = _user32.CreateWindowExW(0, cls_name, "", 0, 0, 0, 0, 0, 0, 0, hinst, None)
+        self._ready.set()
+
+        msg = wintypes.MSG()
+        while not self.stop_event.is_set():
+            ret = _user32.GetMessageW(ctypes.byref(msg), 0, 0, 0)
+            if ret <= 0:
+                break
+            _user32.TranslateMessage(ctypes.byref(msg))
+            _user32.DispatchMessageW(ctypes.byref(msg))
+
+        if self.hwnd_msg:
+            _user32.DestroyWindow(self.hwnd_msg)
+            self.hwnd_msg = 0
+        _user32.UnregisterClassW(cls_name, hinst)
+
+    def _show_menu(self) -> None:
+        menu = _user32.CreatePopupMenu()
+        _user32.AppendMenuW(menu, 0, 1, "Restaurar")
+        _user32.AppendMenuW(menu, 0x00000800, 0, "")  # MF_SEPARATOR
+        _user32.AppendMenuW(menu, 0, 2, "Sair")
+        pos = wintypes.POINT()
+        _user32.GetCursorPos(ctypes.byref(pos))
+        _user32.SetForegroundWindow(self.hwnd_msg)
+        cmd = _user32.TrackPopupMenu(menu, 0x0100, pos.x, pos.y, 0, self.hwnd_msg, None)  # TPM_RETURNCMD
+        _user32.DestroyMenu(menu)
+        if cmd == 1:
+            self.restore()
+        elif cmd == 2:
+            if self.on_quit:
+                self.on_quit()
+            else:
+                self.restore()
+
+    def _add_icon(self) -> None:
+        if not self.hwnd_msg:
+            return
+        nid = NOTIFYICONDATAW()
+        nid.cbSize = ctypes.sizeof(NOTIFYICONDATAW)
+        nid.hWnd = self.hwnd_msg
+        nid.uID = 101
+        nid.uFlags = 0x01 | 0x02 | 0x04 | 0x10  # NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_INFO
+        nid.uCallbackMessage = 0x0400 + 35
+        exe_path = sys.executable or str(Path(sys.argv[0]).resolve())
+        h_icon = _shell32.ExtractIconW(_kernel32.GetModuleHandleW(None), exe_path, 0)
+        if not h_icon or h_icon == 1:
+            h_icon = _user32.LoadIconW(0, 32512)
+        nid.hIcon = h_icon
+        nid.szTip = "AION 2 Astral Vision (Clique para restaurar)"
+        nid.szInfoTitle = "Astral Vision"
+        nid.szInfo = "Programa minimizado na bandeja do sistema."
+        nid.dwInfoFlags = 0x01  # NIIF_INFO
+        _shell32.Shell_NotifyIconW(0, ctypes.byref(nid))
+
+    def _remove_icon(self) -> None:
+        if not self.hwnd_msg:
+            return
+        nid = NOTIFYICONDATAW()
+        nid.cbSize = ctypes.sizeof(NOTIFYICONDATAW)
+        nid.hWnd = self.hwnd_msg
+        nid.uID = 101
+        _shell32.Shell_NotifyIconW(2, ctypes.byref(nid))

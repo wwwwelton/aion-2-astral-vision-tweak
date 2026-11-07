@@ -36,6 +36,7 @@ Funciona com o mouse ou com as teclas abaixo:
 | `T` | Distance View Low: reduz a distância de desenho e de detalhe |
 | `M` | Liga ou desliga o modo de energia em foco (ou clique no chip `ENERGIA`) |
 | `P` | Marca ou desmarca o `Engine.ini` como somente leitura (ou clique no chip `INI`) |
+| `N` | Minimiza para a bandeja do sistema (perto do relógio) |
 | `U` | Desinstala tudo e restaura o `Engine.ini` original |
 | `B` / `R` | Cria um backup / restaura o selecionado |
 | `Ctrl+P` | Paleta de comandos, com todas as funções |
