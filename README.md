@@ -69,20 +69,26 @@ A página do mod orienta marcar o `Engine.ini` como somente leitura, para o jogo
 
 ## Assinatura
 
-Cada release é compilada no GitHub Actions e assinada com o mesmo certificado autoassinado fixo, com carimbo de tempo oficial da DigiCert. A DigiCert comprova a autenticidade e a data da assinatura.
+Cada release é compilada no GitHub Actions e assinada com o mesmo certificado autoassinado fixo (`CN=Astral Vision - Release`, thumbprint `C9DED1BED29518F899115B0DB13A5FE46A25DDEA`), acompanhada de carimbo de tempo oficial da DigiCert (`http://timestamp.digicert.com`).
 
-O certificado público fica embutido no programa e assinado no `.exe`. A chave privada fica protegida nos Secrets do repositório no GitHub e é utilizada exclusivamente na etapa de assinatura do GitHub Actions.
+O certificado público fica embutido no programa e assinado no `.exe`. A chave privada fica protegida nos Secrets do repositório no GitHub (`SIGNING_PFX_BASE64`) e é utilizada exclusivamente na etapa de assinatura do GitHub Actions.
 
-Até você instalar o certificado, o Windows não reconhece a assinatura. Ao instalar o certificado uma vez neste usuário (pela tecla `C` ou na confirmação da primeira execução), o Windows passa a reconhecer todas as releases oficiais como confiáveis.
+Até você instalar o certificado, o Windows pode alertar sobre editor desconhecido. Ao instalar o certificado uma vez neste usuário (pela tecla `C` ou na confirmação da primeira execução), o Windows passa a reconhecer todas as releases oficiais como confiáveis, sem novos alertas do SmartScreen.
 
 ## Linha de comando
 
 ```text
 AstralVision.exe [--ini CAMINHO\Engine.ini] [--profiles PASTA]
 ```
-
 Se houver pastas de perfil ao lado do `.exe`, elas têm prioridade sobre as embutidas.
 
+### Rodar via Python
+
+O programa usa apenas a biblioteca padrão do Windows/Python, sem necessidade de `pip install`:
+
+```powershell
+python astral_vision.py
+```
 ## Compilar
 
 São necessários Windows, Python 3.14, PowerShell 7 e o Visual Studio Build Tools com C++:
@@ -91,9 +97,9 @@ São necessários Windows, Python 3.14, PowerShell 7 e o Visual Studio Build Too
 ./build.ps1
 ```
 
-O script cria um ambiente isolado em `%LOCALAPPDATA%\AstralVisionBuild`, compila com o Nuitka e assina o `AstralVision.exe`. Para usar outro certificado, informe `-CertThumbprint`.
+O script cria um ambiente isolado em `%LOCALAPPDATA%\AstralVisionBuild`, compila com o Nuitka em modo onefile e assina o `AstralVision.exe` com carimbo de tempo da DigiCert. Para usar outro certificado local, informe `-CertThumbprint`.
 
-Cada push na branch `main` gera automaticamente uma release `v1.0.N` pelo workflow [release.yml](.github/workflows/release.yml).
+Cada push na branch `main` gera automaticamente uma nova release `v1.0.N` pelo workflow [release.yml](.github/workflows/release.yml), compilando e assinando com o certificado fixo dos Secrets do repositório.
 
 ## Avisos
 
