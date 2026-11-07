@@ -36,7 +36,7 @@ param(
     [switch]$Release,
     [ValidateSet("All", "Compile", "Sign")]
     [string]$Stage = "All",
-    [string]$ReleaseThumbprint = ""
+    [string]$ReleaseThumbprint = "C9DED1BED29518F899115B0DB13A5FE46A25DDEA"
 )
 $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $true
