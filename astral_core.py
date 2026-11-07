@@ -461,6 +461,8 @@ _user32.SetForegroundWindow.argtypes = (wintypes.HWND,)
 _user32.SetForegroundWindow.restype = wintypes.BOOL
 _user32.PostMessageW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
 _user32.PostMessageW.restype = wintypes.BOOL
+_user32.LoadImageW.argtypes = (wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT, ctypes.c_int, ctypes.c_int, wintypes.UINT)
+_user32.LoadImageW.restype = wintypes.HANDLE
 _user32.CreatePopupMenu.restype = wintypes.HMENU
 _user32.AppendMenuW.argtypes = (wintypes.HMENU, wintypes.UINT, ctypes.c_size_t, wintypes.LPCWSTR)
 _user32.AppendMenuW.restype = wintypes.BOOL
@@ -1229,6 +1231,12 @@ class TrayManager:
         nid.uCallbackMessage = 0x0400 + 35
         exe_path = sys.executable or str(Path(sys.argv[0]).resolve())
         h_icon = _shell32.ExtractIconW(_kernel32.GetModuleHandleW(None), exe_path, 0)
+        if not h_icon or h_icon == 1:
+            for candidate in (app_dir() / "astral_vision.ico", Path(__file__).resolve().parent / "astral_vision.ico"):
+                if candidate.is_file():
+                    h_icon = _user32.LoadImageW(0, str(candidate), 1, 16, 16, 0x00000010)
+                    if h_icon:
+                        break
         if not h_icon or h_icon == 1:
             h_icon = _user32.LoadIconW(0, 32512)
         nid.hIcon = h_icon

@@ -112,6 +112,11 @@ if ($Stage -ne "Sign") {
     if (Test-Path $CaptureDll) {
         $ModeArgs += "--include-data-file=$CaptureDll=presentmon_capture.bin"
     }
+    $Icon = Join-Path $PSScriptRoot "astral_vision.ico"
+    if (Test-Path $Icon) {
+        $ModeArgs += "--windows-icon-from-ico=$Icon"
+        $ModeArgs += "--include-data-file=$Icon=astral_vision.ico"
+    }
     # O Textual e o Rich carregam widgets e tabelas por nome, o que o Nuitka não enxerga sozinho.
     & $VenvPython -m nuitka `
         --mode=onefile `
