@@ -510,9 +510,11 @@ def list_plans() -> list[PowerPlan]:
 
 def choose_boost(plans: list[PowerPlan], ultimate_name: str, high_name: str) -> PowerPlan | None:
     """Desempenho Máximo, se existir; senão Alto desempenho; senão outro plano derivado dele, como o de um fabricante."""
+    ult_names = {"desempenho máximo", "ultimate performance"} | ({ultimate_name.lower()} if ultimate_name else set())
+    high_names = {"alto desempenho", "high performance"} | ({high_name.lower()} if high_name else set())
     tests = (
-        lambda plan: plan.guid == PLAN_ULTIMATE or (ultimate_name and plan.name == ultimate_name),
-        lambda plan: plan.guid == PLAN_HIGH or (high_name and plan.name == high_name),
+        lambda plan: plan.guid == PLAN_ULTIMATE or plan.name.strip().lower() in ult_names,
+        lambda plan: plan.guid == PLAN_HIGH or plan.name.strip().lower() in high_names,
         lambda plan: plan.personality == PERSONALITY_HIGH,
     )
     for test in tests:
@@ -593,6 +595,36 @@ def restore_saved_plan() -> None:
     except OSError:
         set_plan(PLAN_BALANCED)  # o plano guardado foi apagado
     write_service_state(before=None)
+
+
+class SessionPowerFocus:
+    """Troca de plano só nesta sessão, preservando uma escolha externa posterior."""
+
+    def __init__(self) -> None:
+        self.applied: tuple[str, str] | None = None
+        self.focused = False
+
+    def tick(self) -> None:
+        pid = foreground_process_id()
+        self.focused = bool(pid and any(number == pid and name.lower() in GAME_PROCESSES
+                                        for number, name in list_processes()))
+        if self.focused and self.applied is None:
+            boost = boost_plan()
+            if boost is None:
+                raise OSError(no_boost_message())
+            previous = active_plan()
+            set_plan(boost.guid)
+            self.applied = (previous, boost.guid)
+        elif not self.focused:
+            self.restore()
+
+    def restore(self) -> None:
+        self.focused = False
+        if self.applied is not None:
+            previous, selected = self.applied
+            if active_plan() == selected:
+                set_plan(previous)
+            self.applied = None
 
 
 class PowerFocus:
@@ -785,6 +817,7 @@ class Manager:
             "original_missing": False,
             "original_readonly": False,
             "sign_asked": None,  # hash do .exe já perguntado, para não repetir a pergunta na mesma versão
+            "power_focus": True,
         }
         if self.state_path.is_file():
             try:

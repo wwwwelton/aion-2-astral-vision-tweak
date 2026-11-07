@@ -16,13 +16,17 @@ As versões anteriores estão em [Releases](https://github.com/wwwwelton/aion-2-
 4. Na árvore **Perfis**, à esquerda, abra o perfil, escolha a variante e pressione **Instalar**. Só um perfil fica instalado por vez: instalar outro substitui o atual.
 5. Marque as opções extras que quiser na aba **Opções** e abra o jogo pela Steam.
 
+O cabeçalho mostra FPS e frame time de apresentação medidos pelo PresentMon e ping do jogo capturado pelo Npcap. O ping requer [Npcap](https://npcap.com/) instalado e acesso à captura; sem ele aparece `—`. A leitura observa somente conexões TCP do AION 2, sem gravar pacotes em disco nem injetar código no jogo. O formato do ping foi observado no AION 2 Global e pode mudar; o anti-cheat pode restringir ferramentas de terceiros.
+
+FPS é a média das apresentações no último segundo; frame time é o intervalo médio entre elas. Isso não necessariamente equivale aos frames exibidos, especialmente com geração de quadros. Ao rodar pelo Python, o FPS requer `PresentMon.exe` ao lado dos scripts; no build ele fica embutido. As métricas só são coletadas enquanto o programa estiver aberto.
+
 Funciona com o mouse ou com as teclas abaixo:
 
 | Tecla | Ação |
 |---|---|
 | `F1` a `F5` | Abas Opções, Energia, Backups, Assinatura e Dicas |
-| `1` a `5` | Abre um perfil na árvore; setas e Enter escolhem a variante |
-| `I` | Instala a variante selecionada |
+| `1` a `5` | Expande todas as variantes do perfil na árvore |
+| `Enter` / `I` | Instala a variante selecionada |
 | `X` | Remove o perfil e mantém as opções extras |
 | `A` `E` `L` | Additions: melhorar iluminação, remover efeitos de skills e reduzir latência |
 | `G` | FSR Frame Generation |
@@ -30,8 +34,8 @@ Funciona com o mouse ou com as teclas abaixo:
 | `S` | Reduce Stutters |
 | `V` | VSync desligado |
 | `T` | Distance View Low: reduz a distância de desenho e de detalhe |
-| `M` | Liga ou desliga o [serviço de energia](#serviço-de-energia) (só no build local) |
-| `P` | Marca ou desmarca o `Engine.ini` como somente leitura |
+| `M` | Liga ou desliga o modo de energia em foco (ou clique no chip `ENERGIA`) |
+| `P` | Marca ou desmarca o `Engine.ini` como somente leitura (ou clique no chip `INI`) |
 | `U` | Desinstala tudo e restaura o `Engine.ini` original |
 | `B` / `R` | Cria um backup / restaura o selecionado |
 | `Ctrl+P` | Paleta de comandos, com todas as funções |
@@ -68,12 +72,9 @@ São opções separadas e só entram no `Engine.ini` se você as marcar. Os perf
 - **VSync desligado** grava `r.VSync=0` e `RHI.SyncInterval=0`.
 - **Distance View Low** reduz a distância de desenho e de detalhe de players, mobs, objetos, vegetação, terreno, sombras, luzes e decalques. As chaves estão em [Distance View Low.txt](Distance%20View%20Low.txt). Marcada, ela vence o View Distance Quality do jogo e faz mobs e players aparecerem mais perto. Não há confirmação de quais dessas chaves o AION 2 respeita.
 
-### Serviço de energia
+### Energia em foco
 
-**A release publicada não traz o serviço.** O Microsoft Defender classifica como ameaça (`Behavior:Win32/Persistence.A!ml`, `Trojan:Win32/Bearfoos.A!ml`) um `.exe` novo e sem reputação que se extrai, roda sem janela e grava a inicialização automática, e o põe em quarentena. O certificado autoassinado não muda isso. O serviço só existe no [build local](#compilar) e rodando pelo script (`python -m pip install -r requirements.txt`, depois `python astral_vision.py`).
-
-A tecla `M` liga e desliga. Ligado, o serviço roda sem janela, com o programa fechado, e inicia com o Windows:
-
+A tecla `M` (ou o clique no chip `ENERGIA` no topo) liga e desliga o modo de foco na sessão atual, sem gravar inicialização automática no Windows. Enquanto o Astral Vision estiver aberto:
 | Situação | Plano de energia |
 |---|---|
 | Jogo em foco | **Desempenho Máximo**; se não existir, **Alto desempenho** |
@@ -145,6 +146,18 @@ São necessários Windows, Python 3.14, PowerShell 7 e o Visual Studio Build Too
 O script cria um ambiente isolado em `%LOCALAPPDATA%\AstralVisionBuild`, compila com o Nuitka e assina o `AstralVision.exe`. O build local traz o serviço de energia e usa sempre o mesmo certificado, guardado neste PC com chave não exportável e criado só se ainda não existir. Para usar outro certificado, informe `-CertThumbprint`.
 
 Cada push na branch `main` gera automaticamente uma release `v1.0.N` pelo workflow [release.yml](.github/workflows/release.yml), com `./build.ps1 -Release`, sem o serviço. O certificado fixo das releases é gerado uma vez com `./release-cert.ps1`, que exige o GitHub CLI autenticado, grava a chave nos Secrets e o thumbprint no `build.ps1`. Sem isso, a etapa de assinatura falha e nenhuma release é publicada.
+
+O build baixa o [PresentMon 2.3.1](https://github.com/GameTechDev/PresentMon) e verifica seu SHA-256 antes de incluí-lo no executável.
+
+### Licenças de métricas
+
+PresentMon: Copyright (C) 2017-2024 Intel Corporation. Detecção do ping baseada em [AionPingMeter](https://github.com/ArtemNA/AionPingMeter): Copyright (c) 2026 AionPingMeter contributors. Ambos são distribuídos sob a licença MIT:
+
+> Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+>
+> THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## Avisos
 

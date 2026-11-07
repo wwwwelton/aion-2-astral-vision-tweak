@@ -71,6 +71,15 @@ if ($Stage -ne "Sign") {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $File) -Destination $Data
     }
     Get-ChildItem $Data -Recurse -Force -Filter desktop.ini | Remove-Item -Force
+    # PresentMon oficial embutido no onefile; o hash impede executar um download substituído.
+    $PresentMon = Join-Path $BuildDir "PresentMon-2.3.1-x64.exe"
+    if (-not (Test-Path $PresentMon)) {
+        Invoke-WebRequest "https://github.com/GameTechDev/PresentMon/releases/download/v2.3.1/PresentMon-2.3.1-x64.exe" -OutFile $PresentMon
+    }
+    if ((Get-FileHash $PresentMon -Algorithm SHA256).Hash -ne "364E5D98D4D134BD54DD25C22ED2CA2F4883F8BC3ED6502BEE0C151E3436D30C") {
+        throw "PresentMon não corresponde ao binário oficial esperado."
+    }
+
 
     # --- Compilação
     if ($Release) {
@@ -81,6 +90,10 @@ if ($Stage -ne "Sign") {
         # temporária por execução sobraria no %TEMP% a cada vez. As de builds anteriores são apagadas pelo programa.
         $UnpackDir = "{CACHE_DIR}/AstralVision/app/" + (Get-Date -Format "yyyyMMddHHmmss")
         $ModeArgs = @("--windows-console-mode=disable", "--onefile-tempdir-spec=$UnpackDir")
+    }
+    $CaptureDll = Join-Path $BuildDir "presentmon_capture.dll"
+    if (Test-Path $CaptureDll) {
+        $ModeArgs += "--include-data-file=$CaptureDll=presentmon_capture.bin"
     }
     # O Textual e o Rich carregam widgets e tabelas por nome, o que o Nuitka não enxerga sozinho.
     & $VenvPython -m nuitka `
@@ -100,6 +113,8 @@ if ($Stage -ne "Sign") {
         --product-version=$Version `
         --file-version=$Version `
         "--include-data-dir=$Data=profiles" `
+        "--include-data-file=$PresentMon=PresentMon.exe" `
+        "--include-data-file=$PSScriptRoot\README.md=README.md" `
         (Join-Path $PSScriptRoot "astral_vision.py")
 }
 if ($Stage -eq "Compile") {

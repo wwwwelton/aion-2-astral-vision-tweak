@@ -6,7 +6,7 @@ from pathlib import Path
 
 from rich.table import Table
 from rich.text import Text
-from textual import on, work
+from textual import events, on, work
 from textual.app import App, ComposeResult, SystemCommand
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -29,6 +29,7 @@ from textual.widgets import (
 from textual.widgets.selection_list import Selection
 
 import astral_core as core
+from astral_metrics import Metrics
 from astral_tips import (
     ALL_LINE,
     ALL_NOTE,
@@ -193,9 +194,12 @@ class AstralApp(App[None]):
     CSS = """
     Screen { background: $background; }
 
-    #brand { height: 1; padding: 0 1; }
+    #header-bar { height: 1; padding: 0 1; }
+    #brand { width: auto; height: 1; }
+    #metrics { width: 1fr; height: 1; content-align: right middle; text-align: right; }
     #chips { height: 1; padding: 0 1; }
     .chip { width: auto; padding: 0 1; margin-right: 1; }
+    .chip.clickable:hover { text-style: bold underline; }
     .chip.ok { background: $success-muted; color: $text-success; }
     .chip.bad { background: $error; color: $background; text-style: bold; }
     .chip.warn { background: $warning-muted; color: $text-warning; }
@@ -213,7 +217,7 @@ class AstralApp(App[None]):
 
     #main { width: 1fr; height: 100%; }
     #current {
-        height: auto; max-height: 12; padding: 0 1;
+        height: auto; padding: 0 1;
         border: round $secondary 50%; border-title-color: $secondary;
     }
     #current-text { height: auto; }
@@ -273,13 +277,13 @@ class AstralApp(App[None]):
         Binding("f4", "tab('tab-signature')", "Assinatura"),
         Binding("f5", "tab('tab-tips')", "Dicas"),
         Binding("i", "install", "Instalar"),
-        Binding("u", "uninstall", "Desinstalar"),
+        Binding("x", "remove_profile", "Remover"),
+        Binding("p", "readonly", "Leitura"),
+        Binding("m", "service", "Energia"),
         Binding("b", "backup", "Backup"),
+        Binding("u", "uninstall", "Desinstalar"),
         Binding("q", "quit", "Sair"),
-        Binding("x", "remove_profile", show=False),
         Binding("r", "restore", show=False),
-        Binding("p", "readonly", show=False),
-        Binding("m", "service", show=False),
         Binding("c", "tab('tab-signature')", show=False),
         Binding("d", "tab('tab-tips')", show=False),
         *(Binding(key.lower(), f"option('{key}')", show=False) for key in "AELGFSVT"),
@@ -295,18 +299,25 @@ class AstralApp(App[None]):
         self.selected_profile: str | None = None
         self.selected_is_leaf = False
         self.selected_help = ""
+        self._just_highlighted = False
         self.backup_rows: list[tuple] = []
         self.plan_rows: list[tuple] = []
         self.signature: core.ExeSignature | None = None
+        self.power_focus = core.SessionPowerFocus()
+        self.power_timer = None
+        self.metrics = Metrics()
 
     # -- estrutura
     def compose(self) -> ComposeResult:
         brand = Text.assemble((core.APP, f"bold {TEAL}"), ("  AION 2 Global (Steam)", MUTED))
-        yield Static(brand, id="brand")
+        with Horizontal(id="header-bar"):
+            yield Static(brand, id="brand")
+            yield Static("FPS —  FRAME — ms  PING —", id="metrics")
         with Horizontal(id="chips"):
             yield Static(id="chip-game", classes="chip")
-            yield Static(id="chip-service", classes="chip")
-            yield Static(Text(shorten_left(str(self.mgr.ini), 62)), id="ini-path")
+            yield Static(id="chip-service", classes="chip clickable")
+            yield Static(id="chip-readonly", classes="chip clickable")
+            yield Static(Text(shorten_left(str(self.mgr.ini), 50)), id="ini-path")
         with Horizontal(id="body"):
             with Vertical(id="sidebar"):
                 yield Tree("Perfis", id="profiles")
@@ -315,34 +326,36 @@ class AstralApp(App[None]):
                 with Vertical(id="current"):
                     yield Static(id="current-text")
                     with Horizontal(id="current-actions"):
-                        yield Button("Instalar", id="install", compact=True, variant="primary", disabled=True)
-                        yield Button("Remover perfil", id="remove-profile", compact=True, disabled=True)
-                        yield Button("Desinstalar tudo", id="uninstall", compact=True, variant="error")
+                        yield Button("Instalar [I]", id="install", compact=True, variant="primary", disabled=True)
+                        yield Button("Remover perfil [X]", id="remove-profile", compact=True, disabled=True)
+                        yield Button("Somente leitura [P]", id="toggle-readonly", compact=True)
+                        yield Button("Criar backup [B]", id="quick-backup", compact=True)
+                        yield Button("Desinstalar tudo [U]", id="uninstall", compact=True, variant="error")
                 with TabbedContent(initial="tab-options", id="tabs"):
-                    with TabPane("Opções", id="tab-options"):
+                    with TabPane("Opções [F1]", id="tab-options"):
                         with Horizontal(id="options-pane"):
                             yield SelectionList[str](id="options")
                             with VerticalScroll(id="option-help-box"):
                                 yield Static(id="option-help")
-                    with TabPane("Energia", id="tab-power"):
+                    with TabPane("Energia [F2]", id="tab-power"):
                         with Horizontal(classes="switch-row"):
-                            yield Switch(id="service-switch", disabled=not core.service_supported())
+                            yield Switch(id="service-switch")
                             yield Static(id="service-text")
                         yield DataTable(id="plans", cursor_type="row", zebra_stripes=True)
-                    with TabPane("Backups", id="tab-backups"):
+                    with TabPane("Backups [F3]", id="tab-backups"):
                         yield DataTable(id="backups", cursor_type="row", zebra_stripes=True)
                         with Horizontal(id="backup-actions"):
-                            yield Button("Criar backup", id="backup", compact=True, variant="primary")
-                            yield Button("Restaurar selecionado", id="restore", compact=True)
+                            yield Button("Criar backup [B]", id="backup", compact=True, variant="primary")
+                            yield Button("Restaurar selecionado [R]", id="restore", compact=True)
                         with Horizontal(classes="switch-row"):
                             yield Switch(id="readonly-switch")
-                            yield Static(Text("Engine.ini somente leitura: o jogo não consegue regravá-lo"))
-                    with TabPane("Assinatura", id="tab-signature"):
+                            yield Static(Text("Engine.ini somente leitura [P]: o jogo não consegue regravá-lo"))
+                    with TabPane("Assinatura [F4]", id="tab-signature"):
                         yield Static(id="signature-text")
                         with Horizontal(id="signature-actions"):
                             yield Button("Instalar certificado", id="cert-install", compact=True, variant="primary")
                             yield Button("Remover certificado", id="cert-remove", compact=True, variant="error")
-                    with TabPane("Dicas", id="tab-tips"):
+                    with TabPane("Dicas [F5]", id="tab-tips"):
                         with Horizontal():
                             yield OptionList(*TIPS, id="tip-list")
                             with ContentSwitcher(initial="tip-text", id="tip-content"):
@@ -354,7 +367,7 @@ class AstralApp(App[None]):
     def on_mount(self) -> None:
         profiles = self.query_one("#profiles")
         profiles.border_title = "Perfis"
-        profiles.border_subtitle = "1 a 5 abrem | Enter escolhe"
+        profiles.border_subtitle = "1 a 5 abrem | Enter instala"
         self.query_one("#current").border_title = "Instalação"
         self.build_tree()
         self.build_options()
@@ -366,20 +379,43 @@ class AstralApp(App[None]):
         tips.highlighted = 0
         self.refresh_all()
         self.set_interval(2, self.refresh_status)
+        self.metrics.start()
+        self.set_interval(1, self.refresh_metrics)
+        self.power_timer = self.set_interval(1.5, self.check_power_focus)
         self.call_after_refresh(self.show_installed)
         if self.first_message:
             self.say(self.first_message)
         self.startup()
 
+    def on_unmount(self) -> None:
+        if self.power_timer:
+            self.power_timer.stop()
+        self.power_focus.restore()
+        self.metrics.stop()
+
+    def refresh_metrics(self) -> None:
+        fps, frametime, ping = self.metrics.values()
+        fps_style = GREEN if fps and fps >= 60 else YELLOW if fps and fps >= 30 else RED if fps else MUTED
+        ft_style = GREEN if frametime and frametime <= 16.7 else YELLOW if frametime and frametime <= 33.3 else RED if frametime else MUTED
+        ping_style = GREEN if ping is not None and ping < 60 else YELLOW if ping is not None and ping <= 120 else RED if ping is not None else MUTED
+        fps_text = f"{fps:.0f}" if fps is not None else "—"
+        ft_text = f"{frametime:.1f} ms" if frametime is not None else "— ms"
+        ping_text = f"{ping:.0f} ms" if ping is not None else "—"
+        badge = Text.assemble(
+            ("FPS ", MUTED), (fps_text, f"bold {fps_style}"),
+            ("   FRAME ", MUTED), (ft_text, f"bold {ft_style}"),
+            ("   PING ", MUTED), (ping_text, f"bold {ping_style}"),
+        )
+        self.query_one("#metrics", Static).update(badge)
+
     @work(thread=True, exclusive=True, group="startup")
     def startup(self) -> None:
-        """Sem travar a tela: acerta o serviço, limpa extrações antigas e faz a pergunta do primeiro uso."""
+        """Sem travar a tela: limpa extrações antigas, restaura plano pendente e faz a pergunta do primeiro uso."""
         try:
-            if core.service_supported():
-                core.sync_service()
-                core.clean_old_unpacked()
-        except OSError as error:
-            self.call_from_thread(self.say, f"Erro no serviço de energia: {error}")
+            core.restore_saved_plan()
+            core.clean_old_unpacked()
+        except OSError:
+            pass
         self.call_from_thread(self.refresh_all)
         exe = core.own_exe()
         if exe is None:
@@ -477,16 +513,24 @@ class AstralApp(App[None]):
         tree = self.query_one("#profiles", Tree)
         node = next((node for node in tree.root.children if str(node.data).startswith(f"{number}-")), None)
         if node:
+            for sibling in tree.root.children:
+                if sibling is not node:
+                    sibling.collapse()
             tree.focus()
-            node.expand()
+            node.expand_all()
             tree.move_cursor(node)
             self.show_selected(node)  # sem evento se o cursor já estava nessa linha
 
     def action_service(self) -> None:
-        if not core.service_supported():
-            self.say(SERVICE_MISSING, "warning")
-            return
         self.query_one("#service-switch", Switch).toggle()
+
+    @on(events.Click, "#chip-service")
+    def chip_service_clicked(self) -> None:
+        self.action_service()
+
+    @on(events.Click, "#chip-readonly")
+    def chip_readonly_clicked(self) -> None:
+        self.action_readonly()
 
     @on(Button.Pressed, "#install")
     def install_pressed(self) -> None:
@@ -496,10 +540,17 @@ class AstralApp(App[None]):
     def remove_profile_pressed(self) -> None:
         self.action_remove_profile()
 
+    @on(Button.Pressed, "#toggle-readonly")
+    def toggle_readonly_pressed(self) -> None:
+        self.action_readonly()
+
+    @on(Button.Pressed, "#quick-backup")
+    def quick_backup_pressed(self) -> None:
+        self.action_backup()
+
     @on(Button.Pressed, "#uninstall")
     def uninstall_pressed(self) -> None:
         self.action_uninstall()
-
     def get_system_commands(self, screen):
         """A paleta (Ctrl+P) lista todas as funções, inclusive as que só têm atalho."""
         yield from super().get_system_commands(screen)
@@ -517,8 +568,7 @@ class AstralApp(App[None]):
             ("Abrir as dicas e as opções de boot do jogo", "F5 ou D", lambda: self.action_tab("tab-tips")),
         ):
             yield SystemCommand(title, f"Atalho: {help_text}", action)
-        if core.service_supported():
-            yield SystemCommand("Ligar ou desligar o serviço de energia", "Atalho: M", self.action_service)
+        yield SystemCommand("Ligar ou desligar o modo de energia em foco", "Atalho: M", self.action_service)
         for option in self.mgr.options:
             yield SystemCommand(f"Ligar ou desligar: {option_title(option)}", f"Atalho: {option.key}",
                                 lambda key=option.key: self.action_option(key))
@@ -574,12 +624,16 @@ class AstralApp(App[None]):
         if target is None:
             first = tree.root.children[0] if tree.root.children else None
             if first:
+                first.expand_all()
                 tree.move_cursor(first)
                 self.show_selected(first)
             return
         parent = target.parent
         while parent is not None:
-            parent.expand()
+            if parent.parent == tree.root:
+                parent.expand_all()
+            else:
+                parent.expand()
             parent = parent.parent
         self.call_after_refresh(tree.move_cursor, target)
 
@@ -590,15 +644,24 @@ class AstralApp(App[None]):
         self.selected_help = describe_node(rel.rsplit("/", 1)[-1], rel)
         self.refresh_current()
 
+    def _clear_just_highlighted(self) -> None:
+        self._just_highlighted = False
+
+    @on(Tree.NodeExpanded, "#profiles")
+    def profile_expanded(self, event: Tree.NodeExpanded) -> None:
+        if event.node.parent is not None and event.node.parent.parent is None:
+            for child in event.node.children:
+                child.expand_all()
     @on(Tree.NodeHighlighted, "#profiles")
     def profile_highlighted(self, event: Tree.NodeHighlighted) -> None:
+        self._just_highlighted = True
         self.show_selected(event.node)
+        self.call_after_refresh(self._clear_just_highlighted)
 
     @on(Tree.NodeSelected, "#profiles")
     def profile_selected(self, event: Tree.NodeSelected) -> None:
-        if not event.node.allow_expand:
-            self.query_one("#install", Button).focus()
-
+        if not event.node.allow_expand and not self._just_highlighted:
+            self.action_install()
     # -- opções
     def build_options(self) -> None:
         selection = self.query_one("#options", SelectionList)
@@ -647,26 +710,31 @@ class AstralApp(App[None]):
             game.update(Text("JOGO não verificado: alterações bloqueadas"))
             game.add_class("warn")
         else:
-            game.update(Text(f"JOGO ABERTO ({name}): alterações bloqueadas" if name else "JOGO fechado"))
+            game.update(Text(f"JOGO ABERTO ({name}): alterações bloqueadas" if name else "JOGO fechado: pronto"))
             game.add_class("bad" if name else "ok")
         chip = self.query_one("#chip-service", Static)
         chip.remove_class("ok", "bad", "warn", "off")
-        if not core.service_supported():
-            chip.update(Text("ENERGIA só no build local"))
+        enabled = bool(self.mgr.state.get("power_focus", True))
+        if not enabled:
+            chip.update(Text("ENERGIA desligado [M]"))
             chip.add_class("off")
-        elif not core.registered_service():
-            chip.update(Text("ENERGIA desligado"))
-            chip.add_class("off")
-        elif core.service_running():
-            chip.update(Text("ENERGIA ligado"))
+        elif self.power_focus.focused:
+            chip.update(Text(f"ENERGIA: {core.boost_label()} (em foco) [M]"))
             chip.add_class("ok")
         else:
-            chip.update(Text("ENERGIA ligado, mas parado"))
-            chip.add_class("warn")
+            chip.update(Text(f"ENERGIA: {core.boost_label()} [M]"))
+            chip.add_class("ok")
+        ro_chip = self.query_one("#chip-readonly", Static)
+        ro_chip.remove_class("ok", "bad", "warn", "off")
+        if self.mgr.readonly:
+            ro_chip.update(Text("INI: Somente leitura [P]"))
+            ro_chip.add_class("warn")
+        else:
+            ro_chip.update(Text("INI: Editável [P]"))
+            ro_chip.add_class("off")
         self.refresh_current()
         if self.query_one("#tabs", TabbedContent).active == "tab-power":
             self.refresh_power()
-
     def refresh_current(self) -> None:
         state = self.mgr.state
         active = [option_title(option) for option in self.mgr.options if option.key in state["options"]]
@@ -688,8 +756,13 @@ class AstralApp(App[None]):
         for problem in self.mgr.problems:
             table.add_row(Text("Aviso", style=YELLOW), Text(problem, style=YELLOW))
         self.query_one("#current-text", Static).update(table)
-        self.query_one("#install", Button).disabled = not self.selected_is_leaf
+        install_btn = self.query_one("#install", Button)
+        already = self.selected_is_leaf and self.selected_profile == state["profile"]
+        install_btn.label = "Instalado ✓" if already else "Instalar [I]"
+        install_btn.disabled = not self.selected_is_leaf or already
         self.query_one("#remove-profile", Button).disabled = not state["profile"]
+        ro_btn = self.query_one("#toggle-readonly", Button)
+        ro_btn.label = "Liberar escrita [P]" if self.mgr.readonly else "Somente leitura [P]"
         source = "embutidos no programa" if self.mgr.root == core.embedded_root() else self.mgr.root.name
         self.query_one("#profile-help", Static).update(Text(shorten_left(f"Perfis: {source}", 38), style=MUTED))
 
@@ -723,24 +796,31 @@ class AstralApp(App[None]):
         for row in rows:
             table.add_row(*(Text(cell) for cell in row[1:]))
 
+    def check_power_focus(self) -> None:
+        if bool(self.mgr.state.get("power_focus", True)):
+            was_focused = self.power_focus.focused
+            try:
+                self.power_focus.tick()
+            except OSError:
+                pass
+            if self.power_focus.focused != was_focused:
+                self.refresh_status()
+
     def refresh_power(self) -> None:
-        supported = core.service_supported()
-        registered = bool(core.registered_service()) if supported else False
+        enabled = bool(self.mgr.state.get("power_focus", True))
         switch = self.query_one("#service-switch", Switch)
         with switch.prevent(Switch.Changed):
-            switch.value = registered
-        text = Text()
-        if not supported:
-            text.append(SERVICE_MISSING, style=YELLOW)
-        else:
-            try:
-                label = core.boost_label()
-            except OSError:
-                label = "alto desempenho"
-            text.append(f"Serviço de energia: {label} com o jogo em foco, sem o programa aberto", style=INK)
-            problem = core.read_service_state().get("error") if registered else None
-            if problem:
-                text.append(f"\n{problem}", style=YELLOW)
+            switch.value = enabled
+        try:
+            label = core.boost_label()
+        except OSError:
+            label = "alto desempenho"
+        state_note = "ATIVO (jogo em foco)" if enabled and self.power_focus.focused else (
+            "aguardando o AION 2 ganhar foco" if enabled else "desligado")
+        text = Text.assemble(
+            (f"Modo de foco [M]: muda para {label} quando o AION 2 está em foco ", INK),
+            (f"({state_note}; clique num plano abaixo ou Enter para ativá-lo)", MUTED),
+        )
         self.query_one("#service-text", Static).update(text)
         try:
             plans, boost, active = core.list_plans(), core.boost_plan(), core.active_plan()
@@ -762,7 +842,6 @@ class AstralApp(App[None]):
         table.clear()
         for name, guid, role in rows:
             table.add_row(Text(name), Text(guid, style=MUTED), Text(role, style=GREEN))
-
     @on(TabbedContent.TabActivated, "#tabs")
     def tab_activated(self, event: TabbedContent.TabActivated) -> None:
         body = self.query_one("#body")
@@ -780,22 +859,39 @@ class AstralApp(App[None]):
     # -- energia e somente leitura
     @on(Switch.Changed, "#service-switch")
     def service_switched(self, event: Switch.Changed) -> None:
-        if core.service_supported() and event.value != bool(core.registered_service()):
-            event.switch.disabled = True
-            self.toggle_service()
-
-    @work(thread=True, exclusive=True, group="service")
-    def toggle_service(self) -> None:
-        try:
-            message = core.toggle_power_service()
-        except OSError as error:
-            message = f"Erro: {error}"
-        self.call_from_thread(self.service_toggled, message)
-
-    def service_toggled(self, message: str) -> None:
-        self.query_one("#service-switch", Switch).disabled = False
-        self.say(message)
+        if event.value:
+            try:
+                boost = core.boost_plan()
+                if boost is None:
+                    self.say(f"Erro: {core.no_boost_message()}", "warning")
+                    with event.switch.prevent(Switch.Changed):
+                        event.switch.value = False
+                    return
+            except OSError as error:
+                self.say(f"Erro: {error}", "warning")
+                with event.switch.prevent(Switch.Changed):
+                    event.switch.value = False
+                return
+            self.mgr.state["power_focus"] = True
+            self.mgr.save_state()
+            self.check_power_focus()
+            self.say(f"Modo de foco ligado: muda para {boost.name} com o AION 2 em foco.")
+        else:
+            self.mgr.state["power_focus"] = False
+            self.mgr.save_state()
+            self.power_focus.restore()
+            self.say("Modo de foco desligado: plano de energia restaurado.")
         self.refresh_all()
+
+    @on(DataTable.RowSelected, "#plans")
+    def plan_row_selected(self, event: DataTable.RowSelected) -> None:
+        if 0 <= event.cursor_row < len(self.plan_rows):
+            name, guid, _ = self.plan_rows[event.cursor_row]
+            self.attempt(lambda: (core.set_plan(guid), f"Plano de energia ativado: {name}")[1])
+
+    @on(DataTable.RowSelected, "#backups")
+    def backup_row_selected(self, _event: DataTable.RowSelected) -> None:
+        self.action_restore()
 
     @on(Switch.Changed, "#readonly-switch")
     def readonly_switched(self, event: Switch.Changed) -> None:
