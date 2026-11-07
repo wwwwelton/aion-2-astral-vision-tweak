@@ -1,12 +1,12 @@
 # AION 2 Astral Vision Tweak
 
-Instalador com interface de terminal ([Textual](https://github.com/Textualize/textual)) para aplicar os perfis do mod [Astral Vision](https://www.nexusmods.com/aion2/mods/3) no **AION 2 Global da Steam**. Ele grava o perfil e as opções escolhidas no `Engine.ini` do jogo e mantém backups para você poder voltar atrás.
+Aplicativo portátil com interface de terminal ([Textual](https://github.com/Textualize/textual)) para gerenciar e aplicar os perfis do mod [Astral Vision](https://www.nexusmods.com/aion2/mods/3) no **AION 2 Global da Steam**. 100% autocontido, sem instalador e com todas as dependências embutidas no executável.
 
 ## Baixar
 
 **[Baixar o AstralVision.exe](https://github.com/wwwwelton/aion-2-astral-vision-tweak/releases/latest/download/AstralVision.exe)** (versão mais recente)
 
-As versões anteriores estão em [Releases](https://github.com/wwwwelton/aion-2-astral-vision-tweak/releases). Não é preciso instalar Python nem baixar os perfis: tudo já está dentro do `.exe`.
+As versões anteriores estão em [Releases](https://github.com/wwwwelton/aion-2-astral-vision-tweak/releases). O executável é portátil e autocontido: não precisa de instalador, Python, drivers adicionais nem download de perfis: tudo já vem embutido no `.exe`.
 
 ## Como usar
 
@@ -16,7 +16,7 @@ As versões anteriores estão em [Releases](https://github.com/wwwwelton/aion-2-
 4. Na árvore **Perfis**, à esquerda, abra o perfil, escolha a variante e pressione **Instalar**. Só um perfil fica instalado por vez: instalar outro substitui o atual.
 5. Marque as opções extras que quiser na aba **Opções** e abra o jogo pela Steam.
 
-O cabeçalho mostra FPS e frame time de apresentação medidos pelo PresentMon e ping do jogo capturado pelo Npcap. O ping requer [Npcap](https://npcap.com/) instalado e acesso à captura; sem ele aparece `—`. A leitura observa somente conexões TCP do AION 2, sem gravar pacotes em disco nem injetar código no jogo. O formato do ping foi observado no AION 2 Global e pode mudar; o anti-cheat pode restringir ferramentas de terceiros.
+O cabeçalho mostra FPS e frame time de apresentação medidos pelo PresentMon embutido e ping do jogo medido nativamente pelo Windows (ou Npcap, se disponível), sem necessidade de instalar drivers externos nem injetar código no jogo. A leitura observa apenas conexões TCP do AION 2.
 
 FPS é a média das apresentações no último segundo; frame time é o intervalo médio entre elas. Isso não necessariamente equivale aos frames exibidos, especialmente com geração de quadros. Ao rodar pelo Python, o FPS requer `PresentMon.exe` ao lado dos scripts; no build ele fica embutido. As métricas só são coletadas enquanto o programa estiver aberto.
 

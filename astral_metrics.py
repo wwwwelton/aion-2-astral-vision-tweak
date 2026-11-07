@@ -144,6 +144,19 @@ def _npcap(local: str):
     raise OSError("Adaptador Npcap do AION 2 não encontrado")
 
 
+def _find_presentmon() -> Path | None:
+    for candidate in (
+        Path(__file__).resolve().with_name("PresentMon.exe"),
+        core.app_dir() / "PresentMon.exe",
+        Path.cwd() / "PresentMon.exe",
+    ):
+        if candidate.is_file():
+            return candidate
+    local = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+    cached = local / "AstralVisionBuild" / "PresentMon-2.3.1-x64.exe"
+    return cached if cached.is_file() else None
+
+
 def _find_capture_dll() -> Path | None:
     for name in ("presentmon_capture.bin", "presentmon_capture.dll"):
         here = Path(__file__).resolve().with_name(name)
@@ -153,6 +166,46 @@ def _find_capture_dll() -> Path | None:
     cached = local / "AstralVisionBuild" / "presentmon_capture.dll"
     return cached if cached.is_file() else None
 
+
+def _has_npcap() -> bool:
+    windir = os.environ.get("WINDIR", r"C:\Windows")
+    return (Path(windir) / "System32" / "Npcap" / "wpcap.dll").is_file()
+
+
+def _ping_icmp(ip_str: str, timeout_ms: int = 1000) -> float | None:
+    """Ping direto nativo via API iphlpapi do Windows (sem drivers nem instaladores)."""
+    try:
+        ip = struct.unpack("<I", socket.inet_aton(ip_str))[0]
+    except (OSError, ValueError):
+        return None
+    try:
+        api = ctypes.windll.iphlpapi
+        api.IcmpCreateFile.restype = ctypes.c_void_p
+        api.IcmpCloseHandle.argtypes = [ctypes.c_void_p]
+        handle = api.IcmpCreateFile()
+        if not handle or handle == -1 or handle == 0xFFFFFFFFFFFFFFFF:
+            return None
+        try:
+            buf = ctypes.create_string_buffer(1024)
+            if api.IcmpSendEcho(ctypes.c_void_p(handle), ctypes.c_uint32(ip), b"astral", 6, None, buf, 1024, timeout_ms) > 0:
+                status = struct.unpack_from("<I", buf, 4)[0]
+                if status == 0:
+                    return float(struct.unpack_from("<I", buf, 8)[0])
+        finally:
+            api.IcmpCloseHandle(handle)
+    except Exception:
+        pass
+    return None
+
+
+def _ping_tcp(ip_str: str, port: int, timeout_s: float = 1.0) -> float | None:
+    """Fallback de ping via handshake TCP se ICMP estiver bloqueado pelo servidor."""
+    try:
+        t0 = time.perf_counter()
+        with socket.create_connection((ip_str, port), timeout=timeout_s):
+            return (time.perf_counter() - t0) * 1000.0
+    except OSError:
+        return None
 
 class Metrics:
     """Coleta somente enquanto a interface está aberta; não cria serviço nem entrada no logon."""
@@ -207,7 +260,7 @@ class Metrics:
 
     def _frames(self) -> None:
         dll_path = _find_capture_dll()
-        exe_path = Path(__file__).resolve().with_name("PresentMon.exe")
+        exe_path = _find_presentmon()
         while not self.stop_event.is_set():
             pid = _game_pid()
             if pid is not None:
@@ -217,7 +270,7 @@ class Metrics:
                         used_native = self._capture_native_frames(dll_path, pid)
                     except OSError:
                         used_native = False
-                if not used_native and exe_path.is_file():
+                if not used_native and exe_path is not None and exe_path.is_file():
                     self._capture_exe_frames(exe_path, pid)
             self.stop_event.wait(2)
 
@@ -311,15 +364,31 @@ class Metrics:
 
     def _ping(self) -> None:
         while not self.stop_event.is_set():
+            conns = []
             try:
                 conns = [(local, local_port, remote, port) for _, local, local_port, remote, port in _connections()
                          if remote != "127.0.0.1"]
                 if conns:
-                    self._capture(conns)
+                    if _has_npcap():
+                        self._capture(conns)
+                    else:
+                        remote_ip, remote_port = conns[0][2], conns[0][3]
+                        latency = _ping_icmp(remote_ip)
+                        if latency is None:
+                            latency = _ping_tcp(remote_ip, remote_port)
+                        if latency is not None:
+                            with self.lock:
+                                self.ping = (latency, time.monotonic())
             except (OSError, ValueError):
-                pass  # Npcap opcional: sem driver ou acesso a métrica fica indisponível.
-            self.stop_event.wait(4)
-
+                if conns:
+                    remote_ip, remote_port = conns[0][2], conns[0][3]
+                    latency = _ping_icmp(remote_ip)
+                    if latency is None:
+                        latency = _ping_tcp(remote_ip, remote_port)
+                    if latency is not None:
+                        with self.lock:
+                            self.ping = (latency, time.monotonic())
+            self.stop_event.wait(2)
     def _capture(self, conns: list[tuple[str, int, str, int]]) -> None:
         local = conns[0][0]
         conns = [c for c in conns if c[0] == local]

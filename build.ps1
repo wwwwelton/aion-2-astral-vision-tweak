@@ -40,6 +40,26 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $true
+# Auto-elevação via UAC quando executado localmente sem privilégios de Administrador
+$IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $IsAdmin -and -not $env:GITHUB_ACTIONS) {
+    Write-Host "Solicitando permissão de Administrador (UAC)..."
+    $ForwardArgs = @("-ExecutionPolicy", "Bypass", "-NoProfile", "-File", "`"$PSCommandPath`"")
+    foreach ($k in $PSBoundParameters.Keys) {
+        $v = $PSBoundParameters[$k]
+        if ($v -is [switch]) {
+            if ($v.IsPresent) { $ForwardArgs += "-$k" }
+        } else {
+            $ForwardArgs += "-$k"
+            $ForwardArgs += "`"$v`""
+        }
+    }
+    $Proc = Start-Process powershell.exe -WorkingDirectory $PSScriptRoot -ArgumentList $ForwardArgs -Verb RunAs -PassThru -Wait
+    if ($Proc -and $null -ne $Proc.ExitCode -and $Proc.ExitCode -ge 0) {
+        exit $Proc.ExitCode
+    }
+    exit 0
+}
 
 $ExeName = "AstralVision.exe"
 $CertSubject = "CN=Astral Vision Installer - Local Build"
@@ -76,21 +96,18 @@ if ($Stage -ne "Sign") {
     if (-not (Test-Path $PresentMon)) {
         Invoke-WebRequest "https://github.com/GameTechDev/PresentMon/releases/download/v2.3.1/PresentMon-2.3.1-x64.exe" -OutFile $PresentMon
     }
-    if ((Get-FileHash $PresentMon -Algorithm SHA256).Hash -ne "364E5D98D4D134BD54DD25C22ED2CA2F4883F8BC3ED6502BEE0C151E3436D30C") {
+    $ActualHash = if (Get-Command Get-FileHash -ErrorAction SilentlyContinue) {
+        (Get-FileHash $PresentMon -Algorithm SHA256).Hash
+    } else {
+        [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.IO.File]::ReadAllBytes($PresentMon))).Replace("-", "")
+    }
+    if ($ActualHash -ne "364E5D98D4D134BD54DD25C22ED2CA2F4883F8BC3ED6502BEE0C151E3436D30C") {
         throw "PresentMon não corresponde ao binário oficial esperado."
     }
 
 
-    # --- Compilação
-    if ($Release) {
-        $ModeArgs = @("--windows-console-mode=force")
-    } else {
-        # Sem console: o serviço de energia não pode abrir janela, e a interface cria o console dela (open_console).
-        # Pasta de extração fixa por build: o serviço inicia no logon e é encerrado no desligamento, e uma pasta
-        # temporária por execução sobraria no %TEMP% a cada vez. As de builds anteriores são apagadas pelo programa.
-        $UnpackDir = "{CACHE_DIR}/AstralVision/app/" + (Get-Date -Format "yyyyMMddHHmmss")
-        $ModeArgs = @("--windows-console-mode=disable", "--onefile-tempdir-spec=$UnpackDir")
-    }
+    # --- Compilação (executável portátil autocontido, sem instalador)
+    $ModeArgs = @("--windows-console-mode=force")
     $CaptureDll = Join-Path $BuildDir "presentmon_capture.dll"
     if (Test-Path $CaptureDll) {
         $ModeArgs += "--include-data-file=$CaptureDll=presentmon_capture.bin"
@@ -108,8 +125,8 @@ if ($Stage -ne "Sign") {
         --nofollow-import-to=textual.cli `
         --output-dir=$Output `
         --output-filename=$ExeName `
-        --product-name="Astral Vision Installer" `
-        --file-description="Instalador de perfis Astral Vision para AION 2 Global (Steam)" `
+        --product-name="Astral Vision" `
+        --file-description="Astral Vision Tweak para AION 2 Global (Steam)" `
         --product-version=$Version `
         --file-version=$Version `
         "--include-data-dir=$Data=profiles" `

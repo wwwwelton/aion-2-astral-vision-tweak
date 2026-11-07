@@ -53,8 +53,9 @@ def enable_vt() -> None:
 
 def fail(text: str) -> int:
     print(text)
-    print("\nQualquer tecla para sair.")
-    msvcrt.getwch()
+    if sys.stdin and sys.stdin.isatty():
+        print("\nQualquer tecla para sair.")
+        msvcrt.getwch()
     return 1
 
 
@@ -67,7 +68,7 @@ def main() -> int:
     try:
         args = parser.parse_args()
     except SystemExit:
-        if "__compiled__" in globals():  # o console é só desta execução e fecharia antes de dar para ler
+        if "__compiled__" in globals() and sys.stdin and sys.stdin.isatty():
             msvcrt.getwch()
         raise
 
