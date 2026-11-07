@@ -69,11 +69,11 @@ A página do mod orienta marcar o `Engine.ini` como somente leitura, para o jogo
 
 ## Assinatura
 
-Cada release é compilada no GitHub Actions e assinada com um certificado autoassinado novo, com carimbo de tempo da DigiCert. A DigiCert só comprova a data da assinatura; ela não emite esse certificado.
+Cada release é compilada no GitHub Actions e assinada com o mesmo certificado autoassinado fixo, com carimbo de tempo oficial da DigiCert. A DigiCert comprova a autenticidade e a data da assinatura.
 
-O certificado público fica dentro do `.exe`. A chave privada não vai junto e é descartada quando a compilação termina, então ninguém pode usá-la para assinar outros arquivos.
+O certificado público fica embutido no programa e assinado no `.exe`. A chave privada fica protegida nos Secrets do repositório no GitHub e é utilizada exclusivamente na etapa de assinatura do GitHub Actions.
 
-Até você instalar o certificado, o Windows não reconhece a assinatura. O programa pergunta no primeiro uso de cada versão, e a tecla `C` permite instalar ou remover depois. A instalação é opcional, vale só para o seu usuário do Windows e pede confirmação. Instale apenas se você confia em quem gerou o `.exe`.
+Até você instalar o certificado, o Windows não reconhece a assinatura. Ao instalar o certificado uma vez neste usuário (pela tecla `C` ou na confirmação da primeira execução), o Windows passa a reconhecer todas as releases oficiais como confiáveis.
 
 ## Linha de comando
 

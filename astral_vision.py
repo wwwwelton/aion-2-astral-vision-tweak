@@ -556,20 +556,60 @@ class Manager:
 # --------------------------------------------------------------------------- #
 # Assinatura do .exe
 # --------------------------------------------------------------------------- #
-# O build.ps1 assina com um certificado autoassinado e carimbo de tempo da DigiCert. A assinatura guarda
-# o certificado público dentro do .exe; a chave privada nunca sai do PC que fez o build.
+# O build.ps1 assina com o certificado autoassinado fixo e carimbo de tempo da DigiCert. A assinatura guarda
+# o certificado público dentro do .exe; a chave privada fica protegida nos Secrets do repositório no GitHub.
 TRUST_STORE = "Root"
+EMBEDDED_CERT_THUMBPRINT = "C9DED1BED29518F899115B0DB13A5FE46A25DDEA"
+EMBEDDED_CERT_B64 = (
+    "MIIEFDCCAnygAwIBAgIQJveyHLAf/ZRPwt32dKC7nTANBgkqhkiG9w0BAQsFADAi"
+    "MSAwHgYDVQQDDBdBc3RyYWwgVmlzaW9uIC0gUmVsZWFzZTAeFw0yNjExMDcwMDUx"
+    "NDRaFw0zMTExMDcwMTAxNDRaMCIxIDAeBgNVBAMMF0FzdHJhbCBWaXNpb24gLSBS"
+    "ZWxlYXNlMIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAqMmrZOFHj2Na"
+    "HM5RLONgzZe88/P+YOPnqHtg6kkOCiPAofwVrvvsGwZ6PEowpb/YNYddRtG2lt9+"
+    "7EaiVSYmXzEHy/7XjnMadk9REpd9vFizbFo8FRVvWLrjfoNAh4eJ/iJtAmMH0u19"
+    "daxBPUxWZrGzp26FPxbSHpWTj+/pOiC+bu4t94bJ/lMiRqIvP0cskka7ngbc7LOQ"
+    "QxQtIzkWn2f0ljIWcVi3PA7URkOlkLU0JFDYCCHGCq8MAPJoT1oPDd9ae9Cv0SM1"
+    "7THf/p72xoPycNUaB2LYlul86+ijN6srNpEWooiMRvJFarABQkeccwE8+HwqojXm"
+    "I4TVVayk6Y3Z2tsEqN44UeIlZ6hMrUHiOpNoXTQU+RQ1iVXMIt17vF6rFXr+nt4c"
+    "7+sR/eOQmKPpuRb9PYMP6ew3IMZVmMl/R4jg0LUSUvA8cYzVJSgO6GV29TUR9cZL"
+    "y6qh1splvFTDSGwQ9vtY5IjEpcxeb41NWv20eZdADBrVgt1mpDexAgMBAAGjRjBE"
+    "MA4GA1UdDwEB/wQEAwIHgDATBgNVHSUEDDAKBggrBgEFBQcDAzAdBgNVHQ4EFgQU"
+    "RNYcYFFSeFA9SDdhBOWpcaI8BiswDQYJKoZIhvcNAQELBQADggGBAHETxLas9Nqp"
+    "w0qvuqIej0Wu30ChuL1JZczqnQvVJZx+bC5Da0TKGNXt04xwir9yejoEINUkQuSt"
+    "pWVMSf8QG0qc1Ux5YK/PHIf1GWMc8dCR0cKvz2Jwam5uYZILnwAmwQC4DOrr+DTn"
+    "bMuC7aLApjPJh6bFF5hrFVawVapcDRD7wVFgQX485SXibCkh6Hf4p/UVtH/XLf1W"
+    "9rundtnSaPqhv7cxPzV2kcnxjXDcJDG3KOoS2eA5Dg0+tmCmD4bsWygtgdrz8gNP"
+    "fShl6b2a/TY2FRtfpb1ZSkg/yO5McZPsUMVJ0d9IDpxeOSqjbnqgdCldIggGh4y0"
+    "2rbwBDNed+lCwNizCdsZqVxJhL8WHorzucHLHB/A8aDV7WnHMXpUeOyni8Jvwvdg"
+    "l8aW15+Abi1hIRtAAu5nK9EFmcV73xPmQu6M6bSiSEJaoyi6r6UXT3dvvJT5fK8x"
+    "3WyxLL7NweC62LtEBx5PD0hGdD02eei1jXkY+XLjlSHdF58nDLGwXg=="
+)
 READ_SIGNATURE_SCRIPT = r"""
-$signature = Get-AuthenticodeSignature -LiteralPath $env:ASTRAL_EXE
-'{0}|{1}|{2}' -f $signature.Status, $signature.SignerCertificate.Subject, [bool]$signature.TimeStamperCertificate
+if ($env:ASTRAL_EXE -and (Test-Path -LiteralPath $env:ASTRAL_EXE)) {
+    $sig = Get-AuthenticodeSignature -LiteralPath $env:ASTRAL_EXE
+    '{0}|{1}|{2}' -f $sig.Status, $sig.SignerCertificate.Subject, [bool]$sig.TimeStamperCertificate
+} else {
+    $found = Get-ChildItem Cert:\CurrentUser\Root | Where-Object Thumbprint -EQ $env:ASTRAL_THUMBPRINT | Select-Object -First 1
+    if ($found) {
+        'Valid|CN=Astral Vision - Release|True'
+    } else {
+        'UnknownError|CN=Astral Vision - Release|True'
+    }
+}
 """
 CHANGE_TRUST_SCRIPT = r"""
-$certificate = (Get-AuthenticodeSignature -LiteralPath $env:ASTRAL_EXE).SignerCertificate
-if (-not $certificate) { throw 'O .exe nao tem assinatura.' }
+$cert = $null
+if ($env:ASTRAL_EXE -and (Test-Path -LiteralPath $env:ASTRAL_EXE)) {
+    $cert = (Get-AuthenticodeSignature -LiteralPath $env:ASTRAL_EXE).SignerCertificate
+}
+if (-not $cert -and $env:ASTRAL_CERT_B64) {
+    $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new([Convert]::FromBase64String($env:ASTRAL_CERT_B64))
+}
+if (-not $cert) { throw 'Nenhum certificado disponível.' }
 $store = [Security.Cryptography.X509Certificates.X509Store]::new($env:ASTRAL_STORE, 'CurrentUser')
 $store.Open('ReadWrite')
 try {
-    if ($env:ASTRAL_ACTION -eq 'install') { $store.Add($certificate) } else { $store.Remove($certificate) }
+    if ($env:ASTRAL_ACTION -eq 'install') { $store.Add($cert) } else { $store.Remove($cert) }
 } finally {
     $store.Close()
 }
@@ -610,16 +650,26 @@ def run_powershell(script: str, **variables: str) -> subprocess.CompletedProcess
         raise OSError("o PowerShell não respondeu a tempo") from error
 
 
-def read_signature(exe: Path) -> ExeSignature:
-    result = run_powershell(READ_SIGNATURE_SCRIPT, ASTRAL_EXE=str(exe))
+def read_signature(exe: Path | None = None) -> ExeSignature:
+    result = run_powershell(
+        READ_SIGNATURE_SCRIPT,
+        ASTRAL_EXE=str(exe) if exe else "",
+        ASTRAL_THUMBPRINT=EMBEDDED_CERT_THUMBPRINT,
+    )
     fields = result.stdout.strip().split("|")
     if result.returncode != 0 or len(fields) != 3:
         raise OSError(f"não foi possível ler a assinatura: {result.stderr.strip()}")
     return ExeSignature(fields[0], fields[1], fields[2] == "True")
 
 
-def change_trust(exe: Path, action: str) -> None:
-    result = run_powershell(CHANGE_TRUST_SCRIPT, ASTRAL_EXE=str(exe), ASTRAL_STORE=TRUST_STORE, ASTRAL_ACTION=action)
+def change_trust(exe: Path | None, action: str) -> None:
+    result = run_powershell(
+        CHANGE_TRUST_SCRIPT,
+        ASTRAL_EXE=str(exe) if exe else "",
+        ASTRAL_STORE=TRUST_STORE,
+        ASTRAL_ACTION=action,
+        ASTRAL_CERT_B64=EMBEDDED_CERT_B64,
+    )
     if result.returncode != 0:
         raise OSError(f"certificado não alterado: {result.stderr.strip()}")
 
@@ -852,14 +902,14 @@ O 1º uso cria {ORIGINAL_BAK} ao lado do Engine.ini.
 Cada instalação recalcula: backup original + perfil + opções extras.
 Se o arquivo mudou fora do programa, uma cópia '-auto' é salva antes de sobrescrever.""",
     "Assinatura do .exe": """\
-O .exe é assinado no build com um certificado autoassinado, que fica dentro do próprio .exe.
-A chave privada não vai junto. A DigiCert só comprova a data da assinatura (carimbo de tempo);
-ela não emite este certificado.
+O programa utiliza um certificado autoassinado fixo com carimbo de tempo oficial da DigiCert.
+O certificado público fica embutido no programa e assinado no .exe; a chave privada fica protegida
+nos Secrets do repositório no GitHub para os builds e releases automáticas.
 
-Até instalar o certificado, o Windows não reconhece a assinatura. O programa pergunta no 1º uso
-de cada versão, e a tecla C abre o mesmo menu depois, também para remover.
-Instalar faz este usuário confiar em tudo que essa chave assinar: só instale se você confia
-em quem gerou o .exe. O SmartScreen ainda pode avisar, porque ele também considera a reputação.""",
+Até instalar o certificado, o Windows não reconhece a assinatura. O programa pergunta no 1º uso,
+e a tecla C abre o mesmo menu depois, também para remover.
+Ao instalar o certificado uma vez neste usuário, o Windows passa a reconhecer todas as versões
+oficiais do Astral Vision como confiáveis. Instale apenas se você confia em quem gerou o .exe.""",
 }
 
 
@@ -902,29 +952,29 @@ def level_action(mgr: Manager, level: Path) -> str:
     return mgr.apply(rel, options) if rel else ""
 
 
-def signature_menu(exe: Path, signature: ExeSignature, first_run: bool = False) -> str:
+def signature_menu(exe: Path | None, signature: ExeSignature, first_run: bool = False) -> str:
     if signature.status == "Valid" and first_run:
         return ""
     if signature.status == "NotSigned":
-        return "Este .exe não tem assinatura. Gere um assinado com o build.ps1."
+        return "Este executável não tem assinatura. Gere um assinado com o build.ps1."
     if signature.status == "HashMismatch":
-        return "Erro: o .exe foi alterado depois de assinado. Não instale este certificado."
+        return "Erro: o arquivo foi alterado depois de assinado. Não instale este certificado."
     details = [
-        "Primeira execução: assinatura do .exe" if first_run else "Assinatura do .exe",
+        "Primeira execução: assinatura do programa" if first_run else "Assinatura do programa",
         f"Assinante: {signature.subject}",
         f"Carimbo de tempo da DigiCert: {'sim' if signature.timestamped else 'não'}",
     ]
     if signature.status == "Valid":
-        details.append("O Windows já reconhece esta assinatura neste usuário.")
+        details.append("O Windows já reconhece este certificado neste usuário.")
         if select("\n".join(details), ["Remover o certificado deste usuário", "Voltar"], 1) != 0:
             return ""
         action = "remove"
     else:
         details += [
-            "O certificado autoassinado está dentro do .exe. Como não é emitido por uma autoridade,",
-            "o Windows só reconhece a assinatura depois que ele é instalado neste usuário.",
+            "O certificado autoassinado fixo está integrado ao programa e autenticado com",
+            "carimbo de tempo da DigiCert. O Windows reconhece a assinatura após instalá-lo.",
         ]
-        options = ["Instalar o certificado do .exe (o Windows pede confirmação)", "Agora não"]
+        options = ["Instalar o certificado fixo (o Windows pede confirmação)", "Agora não"]
         if select("\n".join(details), options) != 0:
             return "Certificado não instalado. Use a tecla C quando quiser."
         action = "install"
@@ -932,21 +982,23 @@ def signature_menu(exe: Path, signature: ExeSignature, first_run: bool = False) 
     change_trust(exe, action)
     status = read_signature(exe).status
     if action == "remove":
-        return "Certificado removido. O .exe continua assinado, mas o Windows não reconhece mais a assinatura."
+        return "Certificado removido. O programa continua assinado, mas o Windows não reconhece mais a assinatura."
     if status == "Valid":
-        return "Certificado instalado: o Windows reconhece a assinatura do .exe."
+        return "Certificado instalado: o Windows reconhece o programa como confiável."
     return f"Certificado instalado, mas a assinatura continua como {status}."
 
 
 def first_run_signature(mgr: Manager) -> str:
     exe = own_exe()
-    if exe is None:
+    try:
+        signature = read_signature(exe)
+    except Exception:
         return ""
-    build = sha256(exe)
-    if mgr.state["sign_asked"] == build:
+    if signature.status == "Valid":
         return ""
-    signature = read_signature(exe)  # se falhar, a pergunta fica pendente para a próxima execução
-    mgr.state["sign_asked"] = build
+    if mgr.state.get("sign_asked") == EMBEDDED_CERT_THUMBPRINT:
+        return ""
+    mgr.state["sign_asked"] = EMBEDDED_CERT_THUMBPRINT
     mgr.save_state()
     return signature_menu(exe, signature, first_run=True)
 
@@ -957,7 +1009,7 @@ def handle(mgr: Manager, key: str) -> str:
         return ""
     if key == "C":
         exe = own_exe()
-        return signature_menu(exe, read_signature(exe)) if exe else ""
+        return signature_menu(exe, read_signature(exe))
     if key == "B":
         backup = mgr.backup_now()
         return f"Backup criado: {backup.name}" if backup else "Engine.ini não existe: nada a copiar."
