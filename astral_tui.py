@@ -89,8 +89,8 @@ def pairs_table(rows: tuple[tuple[str, str], ...], label_style: str) -> Table:
 
 
 def option_title(option: core.Option) -> str:
-    """O rótulo das opções, sem a explicação que a Distance View Low traz depois dos dois pontos."""
-    return option.label.split(":")[0] if option.key == "T" else option.label
+    """O rótulo das opções, sem a explicação que as opções de distância trazem depois dos dois pontos."""
+    return option.label.split(":")[0] if option.key in ("T", "H") else option.label
 
 
 def shorten_left(text: str, width: int) -> str:
@@ -287,7 +287,7 @@ class AstralApp(App[None]):
         Binding("r", "restore", show=False),
         Binding("c", "tab('tab-signature')", show=False),
         Binding("d", "tab('tab-tips')", show=False),
-        *(Binding(key.lower(), f"option('{key}')", show=False) for key in "AELGFSVT"),
+        *(Binding(key.lower(), f"option('{key}')", show=False) for key in "AELGFSVT" + "H"),
         *(Binding(str(number), f"level({number})", show=False) for number in range(1, 6)),
     ]
 
@@ -511,7 +511,14 @@ class AstralApp(App[None]):
 
     def action_option(self, key: str) -> None:
         options = list(self.mgr.state["options"])
-        options.remove(key) if key in options else options.append(key)
+        if key in options:
+            options.remove(key)
+        else:
+            options.append(key)
+            if key == "H" and "T" in options:
+                options.remove("T")
+            elif key == "T" and "H" in options:
+                options.remove("H")
         self.attempt(lambda: self.mgr.apply(self.mgr.state["profile"], options))
 
     def action_level(self, number: int) -> None:

@@ -34,6 +34,7 @@ Funciona com o mouse ou com as teclas abaixo:
 | `S` | Reduce Stutters |
 | `V` | VSync desligado |
 | `T` | Distance View Low: reduz a distância de desenho e de detalhe |
+| `H` | Distance View High: distância máxima de players, mobs, objetos e texturas |
 | `M` | Liga ou desliga o modo de energia em foco (ou clique no chip `ENERGIA`) |
 | `P` | Marca ou desmarca o `Engine.ini` como somente leitura (ou clique no chip `INI`) |
 | `N` | Minimiza para a bandeja do sistema (perto do relógio) |

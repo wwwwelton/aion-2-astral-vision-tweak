@@ -87,7 +87,7 @@ if ($Stage -ne "Sign") {
     foreach ($Level in Get-ChildItem $PSScriptRoot -Directory | Where-Object Name -Match '^[1-5]-') {
         Copy-Item -LiteralPath $Level.FullName -Destination $Data -Recurse
     }
-    foreach ($File in "Additions.txt", "FSR Frame Generation.txt", "FSR, DLSS, XESS.txt", "Reduce Stutters.txt", "VSync.txt", "Distance View Low.txt") {
+    foreach ($File in "Additions.txt", "FSR Frame Generation.txt", "FSR, DLSS, XESS.txt", "Reduce Stutters.txt", "VSync.txt", "Distance View Low.txt", "Distance View High.txt") {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $File) -Destination $Data
     }
     Get-ChildItem $Data -Recurse -Force -Filter desktop.ini | Remove-Item -Force

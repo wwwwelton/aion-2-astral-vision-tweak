@@ -1,0 +1,47 @@
+-Copy to engine.ini under all 4 main [brackets] to ensure they apply
+                                   1 [/Script/Engine.Engine]
+                                   2 [ConsoleVariables]
+                                   3 [/Script/Engine.RendererSettings]
+                                   4 [SystemSettings]
+
+Increases how far the game draws and keeps maximum detail. Marked, these lines override the in-game sliders.
+Players, mobs, objects, and full-resolution textures remain loaded and visible across the entire screen.
+
+View distance (players, mobs, objects, everything with a MaxDrawDistance):
+r.ViewDistanceScale=2.5
+
+Players and mobs (skeletal meshes - visible at maximum distance):
+r.SkeletalMeshLODBias=0
+r.SkeletalMeshLODRadiusScale=2.5
+
+Objects (static and Nanite meshes - maximum detail at distance):
+r.StaticMeshLODDistanceScale=0.25
+r.Nanite.MaxPixelsPerEdge=1.0
+
+Foliage and grass (drawn to the horizon):
+foliage.LODDistanceScale=2.0
+foliage.CullDistanceScale=2.5
+foliage.MinLOD=0
+foliage.OverestimateLOD=1
+grass.CullDistanceScale=2.5
+
+Terrain:
+r.LandscapeLODDistributionScale=2.0
+r.LandscapeLOD0DistributionScale=2.0
+
+Shadows and lighting at distance:
+r.Shadow.DistanceScale=2.0
+r.Shadow.RadiusThreshold=0.02
+r.DFDistanceScale=2.0
+r.MinScreenRadiusForCSMDepth=0.01
+r.HLOD.ForceDisableCastDynamicShadow=0
+r.LightMaxDrawDistanceScale=2.0
+r.MinScreenRadiusForLights=0.02
+r.Decal.FadeScreenSizeMult=0.5
+
+Textures loaded at highest resolution and distance:
+r.MipMapLODBias=-1
+r.Streaming.MipBias=0
+r.Streaming.UseFixedPoolSize=0
+r.Streaming.FullyLoadUsedTextures=1
+r.Streaming.HLODStrategy=2

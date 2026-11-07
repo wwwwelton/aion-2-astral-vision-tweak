@@ -91,6 +91,7 @@ OPTION_FILES = (
     ("S", "Reduce Stutters.txt", "Reduce Stutters"),
     ("V", "VSync.txt", "VSync desligado"),
     ("T", "Distance View Low.txt", "Distance View Low: reduz a distância de players, mobs e objetos"),
+    ("H", "Distance View High.txt", "Distance View High: distância máxima de players, mobs, objetos e texturas"),
 )
 
 

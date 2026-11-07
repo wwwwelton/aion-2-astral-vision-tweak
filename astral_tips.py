@@ -164,6 +164,8 @@ OPTION_HELP = {
     "V": "Desliga o VSync. Sem esta opção, vale a configuração do jogo.",
     "T": ("Reduz a distância de desenho e de detalhe de players, mobs, objetos, vegetação, terreno, sombras, luzes e "
           "decalques. Vence o View Distance Quality do jogo: deixe desmarcada se mobs aparecendo de perto incomodam."),
+    "H": ("Aumenta a distância de desenho e de detalhe para o máximo: players, mobs, objetos, vegetação, terreno e "
+          "texturas carregados na maior distância possível na tela."),
 }
 
 
